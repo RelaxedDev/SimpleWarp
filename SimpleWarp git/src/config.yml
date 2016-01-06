@@ -1,0 +1,12 @@
+prefix: '&2[Warps] &a'
+
+non-GUI-list: '&3WarpList: &b'
+
+#Enabling this makes the warp list a clickable GUI
+
+GUI-Based: true
+
+#Disabling this will show everyone all warps no matter if they have permission for it or not
+#Likewise, enabling it will only show warps the player has permission for
+
+Perm-Based: true

@@ -1,0 +1,28 @@
+name: SimpleWarps
+main: com.jdkpower.warp.Base
+version: 1.0
+author: JDKPower
+description: This plugin makes warps simple.
+
+
+commands:
+  warps:
+    description: Warps to a certain location
+    permission: warps.main
+    aliases: [warp]
+  setwarp:
+    description: Sets up a warp file and warp.
+    permission: warps.setwarp
+  deletewarp:
+    description: Deletes a warp.
+    permission: warps.delwarp
+    aliases: [delwarp]
+
+
+permissions:
+  warps.*:
+    description: Gives access to all warps and commands.
+    children:
+      warps.delwarp: true
+      warps.setwarp: true
+      warps.main: true
