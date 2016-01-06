@@ -5,11 +5,18 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemFlag;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 
 public class WarpAPI {
 	public Base plugin;
@@ -24,11 +31,6 @@ public class WarpAPI {
 	private String prefix = plugin.getConfig().getString("prefix");
 	private String noPerm = ChatColor.GRAY + "ERROR! "
 			+ ChatColor.DARK_RED + "You don't have permission for this.";
-	
-	public void getWarps()
-	{
-		
-	}
 	
 	public File warpFolder()
 	{
@@ -97,21 +99,87 @@ public class WarpAPI {
 		}
 	}
 	
+	public ItemStack getItem(FileConfiguration con)
+	{
+		String cP = "GUI.";
+		Material mat = Material.getMaterial(con.getString(cP + "item"));
+		ItemStack item = new ItemStack(mat);
+		ItemMeta im = item.getItemMeta();
+		im.setDisplayName(cString(con.getString(cP + "name")));
+		List<String> lores = con.getStringList(cP + "lore");
+		for(int i = 0; i < lores.size(); i++)
+		{
+			String lore = lores.get(i);
+			lores.set(i, cString(lore));
+		}
+		im.setLore(lores);
+		item.setItemMeta(im);
+		return item;
+	}
+	
+	public ItemStack addGlow(ItemStack item)
+	{
+		ItemMeta im = item.getItemMeta();
+		im.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+		item.setItemMeta(im);
+		item.addUnsafeEnchantment(Enchantment.WATER_WORKER, 70);
+		return item;
+	}
+	
+	public void makeInventory(Player p, boolean permBase)
+	{
+		String cP = "GUI.";
+		Inventory inv = Bukkit.createInventory(null, 54, "");
+		p.openInventory(inv);
+		for(File f : warpFolder().listFiles()){
+			FileConfiguration con = YamlConfiguration.loadConfiguration(f);
+			int slot = con.getInt(cP + "slot");
+			if(permBase)
+			{
+				if(p.hasPermission("warp." + con.getString("name")))
+				{
+					ItemStack item = getItem(con);
+					if(con.getBoolean(cP + "glowOnReg"))
+					{
+						addGlow(item);
+					}
+					else if(con.getBoolean(cP + "glowOnPerm"))
+					{
+						addGlow(item);
+					}
+					inv.setItem(slot, item);
+				}
+			}
+			else
+			{
+				ItemStack item = getItem(con);
+				if(con.getBoolean(cP + "glowOnReg"))
+				{
+					addGlow(item);
+				}
+				else if(con.getBoolean(cP + "glowOnPerm"))
+				{
+					if(p.hasPermission("warp." + con.getString("name")))
+					{
+						addGlow(item);
+					}
+				}
+				inv.setItem(slot, item);
+			}
+		}
+	}
+	
 	public void warpList(Player p)
 	{
 		if(GUIBased)
 		{
 			if(PermBased)
 			{
-				for(File f : warpFolder().listFiles()){
-					
-				}
+				makeInventory(p, true);
 			}
 			else
 			{
-				for(File f : warpFolder().listFiles()){
-					
-				}
+				makeInventory(p, false);
 			}
 		}
 		else
@@ -137,6 +205,11 @@ public class WarpAPI {
 			}
 			cMessage(p, str);
 		}
+	}
+	
+	public String cString(String str)
+	{
+		return ChatColor.translateAlternateColorCodes('&', str);
 	}
 	
 	public void cMessage(Player p, String str)
