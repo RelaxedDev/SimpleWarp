@@ -9,6 +9,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
@@ -25,13 +26,6 @@ public class WarpAPI {
 		this.plugin = plugin;
 	}
 	
-	private boolean GUIBased = plugin.getConfig().getBoolean("GUI-Based");
-	private boolean PermBased = plugin.getConfig().getBoolean("Perm-Based");
-	private String noGUI = plugin.getConfig().getString("non-GUI-list");
-	private String prefix = plugin.getConfig().getString("prefix");
-	private String noPerm = ChatColor.GRAY + "ERROR! "
-			+ ChatColor.DARK_RED + "You don't have permission for this.";
-	
 	public File warpFolder()
 	{
 		return new File(plugin.getDataFolder()+File.separator+"Warps");
@@ -45,43 +39,69 @@ public class WarpAPI {
 		plugin.saveDefaultConfig();
 	}
 	
-	public void createWarp(String str, int numb, Player p)
+	public void warpTo(String warp, Player p)
+	{
+		File f = new File(warpFolder(), warp.toLowerCase() + ".yml");
+		if(p.hasPermission("warp." + warp.toLowerCase())
+				&& f.exists())
+		{
+			String lP = "location.";
+			FileConfiguration con = YamlConfiguration.loadConfiguration(f);
+			World world = plugin.getServer().getWorld(con.getString(lP + "world"));
+			double X = con.getDouble(lP + "x");
+			double Y = con.getDouble(lP + "y");
+			double Z = con.getDouble(lP + "z");
+			int yaw = con.getInt(lP + "yaw");
+			int pitch = con.getInt(lP + "pitch");
+			Location loc = new Location(world, X, Y, Z, yaw, pitch);
+			p.teleport(loc);
+			String name = con.getString("realName");
+			cMessage(p, plugin.prefix + "You have warped to " + name + ".");
+		}
+		else
+		{
+			p.sendMessage(plugin.noPerm);
+		}
+	}
+	
+	public void createWarp(String name, int slot, Player p)
 	{
 		if(p.hasPermission("warps.create"))
 		{
-			File f = new File(warpFolder(), str.toLowerCase() + ".yml");
+			File f = new File(warpFolder(), name.toLowerCase() + ".yml");
 			FileConfiguration con = YamlConfiguration.loadConfiguration(f);
 			Location loc = p.getLocation();
 			try 
 			{
 				f.createNewFile();
-				con.set("name", str.toLowerCase());
-				con.set("realName", str);
+				con.set("name", name.toLowerCase());
+				con.set("realName", name);
 				con.set("location.world", loc.getWorld().getName());
 				con.set("location.x", loc.getX());
 				con.set("location.y", loc.getY());
 				con.set("location.z", loc.getZ());
 				con.set("location.pitch", loc.getPitch());
 				con.set("location.yaw", loc.getYaw());
-				con.set("GUI.item", "1");
-				con.set("GUI.slot", numb);
-				con.set("GUI.name", "&c" + str);
+				con.set("GUI.item", 1);
+				con.set("GUI.slot", slot);
+				con.set("GUI.name", "&c" + name);
 				List<String> lores = new ArrayList<String>();
-				lores.add("&cWarp: &b" + str);
+				lores.add("&cWarp: &b" + name);
 				lores.add("&cPermission: &b%perm%");
 				con.set("GUI.lore", lores);
 				con.set("GUI.glowOnReg", true);
 				con.set("GUI.glowOnPerm", false);
+				con.save(f);
 			} 
 			catch (IOException e) 
 			{
 				e.printStackTrace();
 			}
-			cMessage(p, prefix + "You have created warp: " + str);
+			cMessage(p, plugin.prefix + "You have created warp: " + name);
 		}
 		else
 		{
-			p.sendMessage(noPerm);
+			p.sendMessage(plugin.noPerm);
 		}
 	}
 	
@@ -91,29 +111,44 @@ public class WarpAPI {
 		{
 			File f = new File(warpFolder(), str.toLowerCase() + ".yml");
 			f.delete();
-			cMessage(p, prefix + "You have deleted warp: " + str);
+			cMessage(p, plugin.prefix + "You have deleted warp: " + str);
 		}
 		else
 		{
-			p.sendMessage(noPerm);
+			p.sendMessage(plugin.noPerm);
 		}
 	}
 	
-	public ItemStack getItem(FileConfiguration con)
+	public ItemStack getItem(FileConfiguration con, Player p)
 	{
 		String cP = "GUI.";
-		Material mat = Material.getMaterial(con.getString(cP + "item"));
+		@SuppressWarnings("deprecation")
+		Material mat = Material.getMaterial(con.getInt(cP + "item"));
 		ItemStack item = new ItemStack(mat);
 		ItemMeta im = item.getItemMeta();
 		im.setDisplayName(cString(con.getString(cP + "name")));
 		List<String> lores = con.getStringList(cP + "lore");
+		String perm = "FALSE";
+		if(p.hasPermission("warp." + con.getString("name")))
+			perm = "TRUE";
 		for(int i = 0; i < lores.size(); i++)
 		{
 			String lore = lores.get(i);
-			lores.set(i, cString(lore));
+			lores.set(i, cString(lore).replace("%perm%", perm));
 		}
 		im.setLore(lores);
 		item.setItemMeta(im);
+		if(con.getBoolean(cP + "glowOnReg"))
+		{
+			addGlow(item);
+		}
+		else if(con.getBoolean(cP + "glowOnPerm"))
+		{
+			if(p.hasPermission("warp." + con.getString("name")))
+			{
+				addGlow(item);
+			}
+		}
 		return item;
 	}
 	
@@ -129,7 +164,9 @@ public class WarpAPI {
 	public void makeInventory(Player p, boolean permBase)
 	{
 		String cP = "GUI.";
-		Inventory inv = Bukkit.createInventory(null, 54, "");
+		String title = plugin.getConfig().getString("GUI.title");
+		int rows = plugin.getConfig().getInt("GUI.rows");
+		Inventory inv = Bukkit.createInventory(null, 9 * rows, cString(title));
 		p.openInventory(inv);
 		for(File f : warpFolder().listFiles()){
 			FileConfiguration con = YamlConfiguration.loadConfiguration(f);
@@ -138,32 +175,13 @@ public class WarpAPI {
 			{
 				if(p.hasPermission("warp." + con.getString("name")))
 				{
-					ItemStack item = getItem(con);
-					if(con.getBoolean(cP + "glowOnReg"))
-					{
-						addGlow(item);
-					}
-					else if(con.getBoolean(cP + "glowOnPerm"))
-					{
-						addGlow(item);
-					}
+					ItemStack item = getItem(con, p);
 					inv.setItem(slot, item);
 				}
 			}
 			else
 			{
-				ItemStack item = getItem(con);
-				if(con.getBoolean(cP + "glowOnReg"))
-				{
-					addGlow(item);
-				}
-				else if(con.getBoolean(cP + "glowOnPerm"))
-				{
-					if(p.hasPermission("warp." + con.getString("name")))
-					{
-						addGlow(item);
-					}
-				}
+				ItemStack item = getItem(con, p);
 				inv.setItem(slot, item);
 			}
 		}
@@ -171,9 +189,9 @@ public class WarpAPI {
 	
 	public void warpList(Player p)
 	{
-		if(GUIBased)
+		if(plugin.GUIBased)
 		{
-			if(PermBased)
+			if(plugin.PermBased)
 			{
 				makeInventory(p, true);
 			}
@@ -184,8 +202,8 @@ public class WarpAPI {
 		}
 		else
 		{
-			String str = noGUI;
-			if(PermBased)
+			String str = plugin.noGUI;
+			if(plugin.PermBased)
 			{
 				for(File f : warpFolder().listFiles()){
 					FileConfiguration con = YamlConfiguration.loadConfiguration(f);
